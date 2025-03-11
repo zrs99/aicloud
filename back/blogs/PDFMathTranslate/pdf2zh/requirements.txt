@@ -1,0 +1,10 @@
+deepl
+ollama
+openai
+xinference_client
+azure-ai-translation-text
+tencentcloud-sdk-python
+pdfminer.six
+peewee
+pymupdf
+babeldoc

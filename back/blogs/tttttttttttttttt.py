@@ -1,13 +1,16 @@
-import os
+# Please install OpenAI SDK first: `pip3 install openai`
 
-# 获取当前脚本的目录
-current_dir = os.path.dirname(__file__)
+from openai import OpenAI
 
-# 拼接相对路径
-relative_path = os.path.join(current_dir, "data", "file.txt")
+client = OpenAI(api_key="sk-6f07edb501904443af1a0c14626d314f", base_url="https://api.deepseek.com")
 
-# 转换为绝对路径
-abs_path = os.path.abspath(relative_path)
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant"},
+        {"role": "user", "content": "Hello"},
+    ],
+    stream=False
+)
 
-print("相对路径:", relative_path)
-print("绝对路径:", abs_path)
+print(response.choices[0].message.content)

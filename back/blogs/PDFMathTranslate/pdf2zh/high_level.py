@@ -68,23 +68,24 @@ def check_files(files: List[str]) -> List[str]:
 
 
 def translate_patch(
-    inf: BinaryIO,
-    pages: Optional[list[int]] = None,
-    vfont: str = "",
-    vchar: str = "",
-    thread: int = 0,
-    doc_zh: Document = None,
-    lang_in: str = "",
-    lang_out: str = "",
-    service: str = "",
-    noto_name: str = "",
-    noto: Font = None,
-    callback: object = None,
-    cancellation_event: asyncio.Event = None,
-    model: OnnxModel = None,
-    envs: Dict = None,
-    prompt: Template = None,
-    **kwarg: Any,
+        inf: BinaryIO,
+        pages: Optional[list[int]] = None,
+        vfont: str = "",
+        vchar: str = "",
+        thread: int = 0,
+        doc_zh: Document = None,
+        lang_in: str = "",
+        lang_out: str = "",
+        service: str = "",
+        noto_name: str = "",
+        noto: Font = None,
+        callback: object = None,
+        cancellation_event: asyncio.Event = None,
+        model: OnnxModel = None,
+        envs: Dict = None,
+        prompt: Template = None,
+        update_progress=None,
+        **kwarg: Any,
 ) -> None:
     rsrcmgr = PDFResourceManager()
     layout = {}
@@ -115,6 +116,7 @@ def translate_patch(
     doc = PDFDocument(parser)
     with tqdm.tqdm(total=total_pages) as progress:
         for pageno, page in enumerate(PDFPage.create_pages(doc)):
+            update_progress(int(progress.n/progress.total*100))
             if cancellation_event and cancellation_event.is_set():
                 raise CancelledError("task cancelled")
             if pages and (pageno not in pages):
@@ -160,26 +162,28 @@ def translate_patch(
             doc_zh[page.pageno].set_contents(page.page_xref)
             interpreter.process_page(page)
 
+        update_progress(int(progress.n / progress.total * 100))
     device.close()
     return obj_patch
 
 
 def translate_stream(
-    stream: bytes,
-    pages: Optional[list[int]] = None,
-    lang_in: str = "",
-    lang_out: str = "",
-    service: str = "",
-    thread: int = 0,
-    vfont: str = "",
-    vchar: str = "",
-    callback: object = None,
-    cancellation_event: asyncio.Event = None,
-    model: OnnxModel = None,
-    envs: Dict = None,
-    prompt: Template = None,
-    skip_subset_fonts: bool = False,
-    **kwarg: Any,
+        stream: bytes,
+        pages: Optional[list[int]] = None,
+        lang_in: str = "",
+        lang_out: str = "",
+        service: str = "",
+        thread: int = 0,
+        vfont: str = "",
+        vchar: str = "",
+        callback: object = None,
+        cancellation_event: asyncio.Event = None,
+        model: OnnxModel = None,
+        envs: Dict = None,
+        prompt: Template = None,
+        skip_subset_fonts: bool = False,
+        update_progress=None,
+        **kwarg: Any,
 ):
     font_list = [("tiro", None)]
 
@@ -296,27 +300,55 @@ def convert_to_pdfa(input_path, output_path):
     pdf.close()
 
 
-def translate(
-    files: list[str],
-    output: str = "",
-    pages: Optional[list[int]] = None,
-    lang_in: str = "",
-    lang_out: str = "",
-    service: str = "",
-    thread: int = 0,
-    vfont: str = "",
-    vchar: str = "",
-    callback: object = None,
-    compatible: bool = False,
-    cancellation_event: asyncio.Event = None,
-    model: OnnxModel = None,
-    envs: Dict = None,
-    prompt: Template = None,
-    skip_subset_fonts: bool = False,
-    save_path: str = "",
-    **kwarg: Any,
-):
+def download_remote_fonts(lang: str):
+    lang = lang.lower()
+    LANG_NAME_MAP = {
+        **{la: "GoNotoKurrent-Regular.ttf" for la in noto_list},
+        **{
+            la: f"SourceHanSerif{region}-Regular.ttf"
+            for region, langs in {
+                "CN": ["zh-cn", "zh-hans", "zh"],
+                "TW": ["zh-tw", "zh-hant"],
+                "JP": ["ja"],
+                "KR": ["ko"],
+            }.items()
+            for la in langs
+        },
+    }
+    font_name = LANG_NAME_MAP.get(lang, "GoNotoKurrent-Regular.ttf")
 
+    # docker
+    font_path = ConfigManager.get("NOTO_FONT_PATH", Path("/app", font_name).as_posix())
+    if not Path(font_path).exists():
+        font_path, _ = get_font_and_metadata(font_name)
+        font_path = font_path.as_posix()
+
+    logger.info(f"use font: {font_path}")
+
+    return font_path
+
+
+def translate(
+        files: list[str],
+        output: str = "",
+        pages: Optional[list[int]] = None,
+        lang_in: str = "",
+        lang_out: str = "",
+        service: str = "",
+        thread: int = 0,
+        vfont: str = "",
+        vchar: str = "",
+        callback: object = None,
+        compatible: bool = False,
+        cancellation_event: asyncio.Event = None,
+        model: OnnxModel = None,
+        envs: Dict = None,
+        prompt: Template = None,
+        skip_subset_fonts: bool = False,
+        save_path: str = "",
+        update_progress=None,
+        **kwarg: Any,
+):
     if not files:
         raise PDFValueError("No files to process.")
 
@@ -332,14 +364,14 @@ def translate(
 
     for file in files:
         if type(file) is str and (
-            file.startswith("http://") or file.startswith("https://")
+                file.startswith("http://") or file.startswith("https://")
         ):
             print("Online files detected, downloading...")
             try:
                 r = requests.get(file, allow_redirects=True)
                 if r.status_code == 200:
                     with tempfile.NamedTemporaryFile(
-                        suffix=".pdf", delete=False
+                            suffix=".pdf", delete=False
                     ) as tmp_file:
                         print(f"Writing the file: {file}...")
                         tmp_file.write(r.content)
@@ -356,7 +388,7 @@ def translate(
         # --compatible / -cp
         if compatible:
             with tempfile.NamedTemporaryFile(
-                suffix="-pdfa.pdf", delete=False
+                    suffix="-pdfa.pdf", delete=False
             ) as tmp_pdfa:
                 print(f"Converting {file} to PDF/A format...")
                 convert_to_pdfa(file, tmp_pdfa.name)
@@ -371,7 +403,7 @@ def translate(
         file_path = Path(file)
         try:
             if file_path.exists() and file_path.resolve().is_relative_to(
-                temp_dir.resolve()
+                    temp_dir.resolve()
             ):
                 file_path.unlink(missing_ok=True)
                 logger.debug(f"Cleaned temp file: {file_path}")
@@ -403,31 +435,3 @@ def translate(
         result_files.append((str(file_mono), str(file_dual)))
 
     return result_files
-
-
-def download_remote_fonts(lang: str):
-    lang = lang.lower()
-    LANG_NAME_MAP = {
-        **{la: "GoNotoKurrent-Regular.ttf" for la in noto_list},
-        **{
-            la: f"SourceHanSerif{region}-Regular.ttf"
-            for region, langs in {
-                "CN": ["zh-cn", "zh-hans", "zh"],
-                "TW": ["zh-tw", "zh-hant"],
-                "JP": ["ja"],
-                "KR": ["ko"],
-            }.items()
-            for la in langs
-        },
-    }
-    font_name = LANG_NAME_MAP.get(lang, "GoNotoKurrent-Regular.ttf")
-
-    # docker
-    font_path = ConfigManager.get("NOTO_FONT_PATH", Path("/app", font_name).as_posix())
-    if not Path(font_path).exists():
-        font_path, _ = get_font_and_metadata(font_name)
-        font_path = font_path.as_posix()
-
-    logger.info(f"use font: {font_path}")
-
-    return font_path

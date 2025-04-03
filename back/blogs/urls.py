@@ -12,7 +12,7 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('upload/', views.FileUploadView.as_view(), name='upload_file'),
-    # path('upload/success/', views.upload_success.as_view(), name='upload_success'),
+    path('download/<str:task_id>/', views.FileDownloadView.as_view(), name='download_translated_file'),
 ]
 
 

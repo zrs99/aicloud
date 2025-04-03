@@ -13,7 +13,7 @@
 
     <!-- 文件上传区域 -->
     <div class="upload-area">
-      <input type="file" @change="handleFileChange" class="file-input" />
+      <input type="file" @change="handleFileChange" class="file-input"/>
       <button @click="uploadFile" class="upload-button">上传并翻译</button>
     </div>
 
@@ -27,7 +27,7 @@
     <!-- 接收翻译文件选项 -->
     <div v-if="translationComplete" class="download-option">
       <label>
-        <input type="checkbox" v-model="receiveTranslatedFile" />
+        <input type="checkbox" v-model="receiveTranslatedFile"/>
         接收翻译后的文件
       </label>
       <button v-if="receiveTranslatedFile" @click="downloadTranslatedFile" class="download-button">
@@ -41,7 +41,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import {ref} from 'vue';
 import axios from 'axios';
 
 // 响应式数据
@@ -51,7 +51,8 @@ const progress = ref(0);
 const selectedLanguage = ref('zh'); // 默认选择中文
 const translationComplete = ref(false);
 const receiveTranslatedFile = ref(false);
-const translatedFileUrl = ref('');
+const taskId = ref(null);
+let ws = null;
 
 // 处理文件选择
 const handleFileChange = (event) => {
@@ -59,17 +60,6 @@ const handleFileChange = (event) => {
   message.value = ''; // 清空消息
 };
 
-// 模拟翻译进度（实际应由后端返回）
-const simulateProgress = () => {
-  progress.value = 0;
-  const interval = setInterval(() => {
-    progress.value += 10;
-    if (progress.value >= 100) {
-      clearInterval(interval);
-      translationComplete.value = true;
-    }
-  }, 500);
-};
 
 // 上传文件并翻译
 const uploadFile = async () => {
@@ -85,21 +75,53 @@ const uploadFile = async () => {
 
   try {
     message.value = '正在上传并翻译...';
-    simulateProgress(); // 模拟进度
 
-    const response = await axios.post('http://127.0.0.1:8000/blogs/upload/', formData, {
+
+    // const response = await axios.post('http://127.0.0.1:8000/blogs/upload/', formData, {
+    const response = await axios.post('http://10.241.109.58:8000/blogs/upload/', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
-      responseType: 'blob', // 接收二进制文件
-      // onUploadProgress: (progressEvent) => {
-      //   // 实际进度应从后端返回，这里仅模拟
-      //   // progress.value = Math.round((progressEvent.loaded / progressEvent.total) * 100);
-      // },
     });
 
-    translatedFileUrl.value = window.URL.createObjectURL(new Blob([response.data]));
-    message.value = '翻译完成！';
+    taskId.value = response.data.task_id;
+
+    message.value = '翻译任务已启动！';
+    // socket.value = new WebSocket(`ws://127.0.0.1:8000/ws/progress/${taskId}/`);
+
+    ws = new WebSocket(`ws://10.241.109.58:8000/ws/progress/${taskId.value}/`);
+    // ws = new WebSocket(`ws://127.0.0.1:8000/ws/progress/${taskId.value}/`);
+
+
+
+    ws.onopen = () => {
+      console.log('WebSocket 连接已建立');
+      // 发送初始化消息
+      ws.send(JSON.stringify({type: 'init', task_id: taskId.value}));
+    };
+
+    ws.onerror = (error) => {
+      console.error('WebSocket 错误:', error);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.progress !== undefined) {
+          progress.value = data.progress;
+          if (data.progress >= 100) {
+            translationComplete.value = true;
+          }
+        }
+      } catch (e) {
+        console.error('解析消息失败:', e);
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WebSocket 连接已关闭');
+    };
+
   } catch (error) {
     message.value = '文件上传或翻译失败';
     console.error('Error uploading file:', error);
@@ -109,16 +131,63 @@ const uploadFile = async () => {
 };
 
 // 下载翻译文件
-const downloadTranslatedFile = () => {
-  if (translatedFileUrl.value && receiveTranslatedFile.value) {
+const downloadTranslatedFile = async () => {
+  // if (!taskId.value) return;
+  //
+  // try {
+  //   const response = await axios.get(`http://localhost:8000/blogs/download/${taskId.value}/`, {
+  //     headers: {
+  //       'Content-Type': 'multipart/form-data',
+  //     },
+  //     responseType: 'blob',
+  //   });
+  //
+  //   const url = window.URL.createObjectURL(new Blob([response.data]));
+  //   const link = document.createElement('a');
+  //   link.href = url;
+  //   link.setAttribute('download', `translated_${file.value.name}`);
+  //   document.body.appendChild(link);
+  //   link.click();
+  //   document.body.removeChild(link);
+  //
+  // } catch (error) {
+  //   message.value = '文件下载失败';
+  //   console.error('Error downloading file:', error);
+  // }
+
+   if (!taskId.value) return;
+
+  try {
+    // 添加时间戳防止缓存
+    // const url = `http://localhost:8000/blogs/download/${taskId.value}/?t=${Date.now()}`;
+    const url = `http://10.241.109.58:8000/blogs/download/${taskId.value}/?t=${Date.now()}`;
+
+    // 方法A：直接创建隐藏链接
     const link = document.createElement('a');
-    link.href = translatedFileUrl.value;
+    link.href = url;
     link.setAttribute('download', `translated_${file.value.name}`);
+    link.style.display = 'none';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+
+    // // 方法B：使用fetch替代axios
+    // const response = await fetch(url);
+    // if (!response.ok) throw new Error('Download failed');
+    // const blob = await response.blob();
+    // const blobUrl = window.URL.createObjectURL(blob);
+    // const tempLink = document.createElement('a');
+    // tempLink.href = blobUrl;
+    // tempLink.setAttribute('download', `translated_${file.value.name}`);
+    // tempLink.click();
+    // window.URL.revokeObjectURL(blobUrl);
+
+  } catch (error) {
+    message.value = '文件下载失败';
+    console.error('下载错误:', error);
   }
 };
+
 </script>
 
 <style scoped>

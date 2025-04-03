@@ -25,22 +25,29 @@ SECRET_KEY = "django-insecure-0&a007$rso97hgr)pxf=h%sn*vrcxcpi%81di*+4lbp7)dq$w4
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+# ALLOWED_HOSTS = ['*']
+
+ALLOWED_HOSTS = [
+    '10.241.109.58',
+    'localhost',
+    '127.0.0.1'
+]
 
 # Application definition
 MEDIA_URL = '/media/'  # 访问文件的 URL 前缀
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 INSTALLED_APPS = [
+    'channels',
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
-    'blogs',
     'rest_framework',
     'corsheaders',
+    'blogs',
 ]
 
 MIDDLEWARE = [
@@ -53,6 +60,30 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# Celery 配置
+CELERY_IMPORTS = [
+    'blogs.tasks',  # 替换为你的任务模块路径
+]
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+
+# Channels 配置
+WSGI_APPLICATION = "back.wsgi.application"
+ASGI_APPLICATION = 'back.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
 
 # 允许所有域名访问（仅用于开发环境）
 CORS_ALLOW_ALL_ORIGINS = True
@@ -74,8 +105,6 @@ TEMPLATES = [
         },
     },
 ]
-
-WSGI_APPLICATION = "back.wsgi.application"
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases

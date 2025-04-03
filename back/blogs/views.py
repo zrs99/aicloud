@@ -8,75 +8,65 @@ import os
 from django.http import FileResponse
 from pathlib import Path
 
+from .PDFMathTranslate.pdf2zh.high_level import translate, download_remote_fonts
+from .PDFMathTranslate.pdf2zh.doclayout import OnnxModel, ModelInstance
+from channels.layers import get_channel_layer
+
+import os
+from django.http import FileResponse
+from pathlib import Path
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+import uuid
+from celery.result import AsyncResult
+from django.http import JsonResponse
+
+from celery import shared_task
+from celery.result import AsyncResult
+from channels.layers import get_channel_layer
+from asgiref.sync import async_to_sync
+import time
+from .tasks import aipdf
+
+
+class FileDownloadView(APIView):
+    def get(self, request, task_id):
+        task = AsyncResult(task_id)
+        if task.state != 'SUCCESS':
+            return JsonResponse({"error": "任务未完成"}, status=400)
+
+        translated_path = task.result
+        print(translated_path)
+        response = FileResponse(open(translated_path, 'rb'), content_type='application/octet-stream')
+        response['Content-Disposition'] = f'attachment; filename="{os.path.basename(translated_path)}"'
+        response['Content-Type'] = 'application/octet-stream'  # 通用二进制流类型
+        # response['X-Content-Type-Options'] = 'nosniff'  # 防止MIME类型嗅探
+        # response['Cache-Control'] = 'no-store'  # 禁用缓存
+        return response
+
 
 class FileUploadView(APIView):  # APIView 是 DRF 提供的一个基础视图类，用于处理 HTTP 请求
-    parser_classes = (MultiPartParser, FormParser)
-
-    # def get(self, request, *args, **kwargs):
-    #     form = UploadFileForm()
-    #     return render(request, 'blogs/upload.html', {'form': form})
-
     def post(self, request, *args, **kwargs):
         # 保存上传的文件
         file_serializer = UploadedFileSerializer(data=request.data)
+        # print(file_serializer.is_valid())
         if file_serializer.is_valid():
             uploaded_file = file_serializer.save()
 
-            # 获取文件路径和扩展名
-            file_path = uploaded_file.file.path
+            file_path = uploaded_file.file.path  # 获取文件路径和扩展名
+            # task_id = str(uuid.uuid4())  # 生成任务 ID
 
-            # 处理文件（示例：对文本文件内容转换为大写，其他文件直接返回）
-            from .PDFMathTranslate import aipdf
+            # 处理文件
             from django.conf import settings
             save_path = Path(settings.BASE_DIR) / 'media' / 'blogs' / 'processed'  # Path 对象: 表示一个文件系统路径
             save_path.mkdir(parents=True, exist_ok=True)  # parents=true自动创建路径中所有缺失的父目录 exist_ok=true当目标目录已存在时不会抛出错误
 
-            try:
-                # file_processed = aipdf.delay(file_path, save_path)
-                file_processed = aipdf(file_path, save_path)
-            except Exception as e:
-                print(f"An error occurred: {e}")
-
-            # 返回处理后的文件给用户
-            response = FileResponse(open(file_processed, 'rb'), content_type='application/octet-stream')
-            response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_processed)}"'
-            return response
-
+            # 启动异步任务
+            task = aipdf.delay(file_path, str(save_path))
+            # task_id.result = file_processed_path
+            # 返回任务 ID
+            return Response({'task_id': task.id, "message": "翻译任务已启动"}, status=status.HTTP_200_OK)
         else:
             return Response(file_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-# class FileUploadView(View):
-#     def get(self, request, *args, **kwargs):
-#         form = UploadFileForm()
-#         return render(request, 'blogs/upload.html', {'form': form})
-#
-#     def post(self, request, *args, **kwargs):
-#         form = UploadFileForm(request.POST, request.FILES)
-#         if form.is_valid():
-#             # 保存上传的文件
-#             uploaded_file = form.save()
-#
-#             # 获取文件路径和扩展名
-#             file_path = uploaded_file.file.path
-#             # file_name = uploaded_file.file.name
-#             # file_extension = os.path.splitext(file_name)[1].lower()  # 获取文件扩展名
-#
-#             # 处理文件（示例：对文本文件内容转换为大写，其他文件直接返回）
-#             from .PDFMathTranslate import aipdf
-#             from django.conf import settings
-#
-#             try:
-#                 save_path = os.path.join(settings.BASE_DIR, 'media', 'blogs', 'processed')
-#                 if not os.path.exists(save_path):
-#                     os.mkdir(save_path)
-#                 file_processed = aipdf(file_path, save_path)
-#             except Exception as e:
-#                 print(f"An error occurred: {e}")
-#
-#             # 返回处理后的文件给用户
-#             with open(file_processed, 'rb') as f:
-#                 response = HttpResponse(f.read(), content_type='application/octet-stream')
-#                 response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_processed)}"'
-#                 return response
-#         else:
-#             return render(request, 'blogs/upload.html', {'form': form})
+

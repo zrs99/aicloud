@@ -40,8 +40,6 @@ class FileDownloadView(APIView):
         response = FileResponse(open(translated_path, 'rb'), content_type='application/octet-stream')
         response['Content-Disposition'] = f'attachment; filename="{os.path.basename(translated_path)}"'
         response['Content-Type'] = 'application/octet-stream'  # 通用二进制流类型
-        # response['X-Content-Type-Options'] = 'nosniff'  # 防止MIME类型嗅探
-        # response['Cache-Control'] = 'no-store'  # 禁用缓存
         return response
 
 

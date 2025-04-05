@@ -9,10 +9,12 @@
   },
   "dependencies": {
     "@vueuse/core": "^13.0.0",
-    "axios": "^1.8.2",
+    "axios": "^1.8.4",
     "core-js": "^3.8.3",
-    "pdfjs-dist": "^2.11.338",
-    "vue": "^3.2.13"
+    "pdfjs-dist": "^2.16.105",
+    "vue": "^3.2.13",
+    "vue-pdf-embed": "^2.1.2",
+    "vue-router": "^4.5.0"
   },
   "devDependencies": {
     "@babel/core": "^7.12.16",

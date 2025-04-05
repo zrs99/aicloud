@@ -132,29 +132,6 @@ const uploadFile = async () => {
 
 // 下载翻译文件
 const downloadTranslatedFile = async () => {
-  // if (!taskId.value) return;
-  //
-  // try {
-  //   const response = await axios.get(`http://localhost:8000/blogs/download/${taskId.value}/`, {
-  //     headers: {
-  //       'Content-Type': 'multipart/form-data',
-  //     },
-  //     responseType: 'blob',
-  //   });
-  //
-  //   const url = window.URL.createObjectURL(new Blob([response.data]));
-  //   const link = document.createElement('a');
-  //   link.href = url;
-  //   link.setAttribute('download', `translated_${file.value.name}`);
-  //   document.body.appendChild(link);
-  //   link.click();
-  //   document.body.removeChild(link);
-  //
-  // } catch (error) {
-  //   message.value = '文件下载失败';
-  //   console.error('Error downloading file:', error);
-  // }
-
    if (!taskId.value) return;
 
   try {
@@ -170,17 +147,6 @@ const downloadTranslatedFile = async () => {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-
-    // // 方法B：使用fetch替代axios
-    // const response = await fetch(url);
-    // if (!response.ok) throw new Error('Download failed');
-    // const blob = await response.blob();
-    // const blobUrl = window.URL.createObjectURL(blob);
-    // const tempLink = document.createElement('a');
-    // tempLink.href = blobUrl;
-    // tempLink.setAttribute('download', `translated_${file.value.name}`);
-    // tempLink.click();
-    // window.URL.revokeObjectURL(blobUrl);
 
   } catch (error) {
     message.value = '文件下载失败';
